@@ -1,65 +1,156 @@
+/*William Baskin*/
 #include <ros/ros.h>
 #include <geometry_msgs/Twist.h>
 int main(int argc, char **argv)
 {
-ros::init(argc,argv,"robot0_commander"); // name of this node 
-ros::NodeHandle nh; // two lines to create a publisher object that can talk to ROS
-//stdr "robot0" is expecting to receive commands on topic: /robot0/cmd_vel
-// commands are of type geometry_msgs/Twist, but they use only velocity in x dir and
-//  yaw rate in z-dir; other 4 fields will be ignored
-ros::Publisher cmd_publisher = nh.advertise<geometry_msgs::Twist>("/robot0/cmd_vel",1);
-// change topic to command abby...
-//ros::Publisher cmd_publisher = nh.advertise<geometry_msgs::Twist>("abby/cmd_vel",1);
-ros::Rate sleep_timer(100); //let's make a 100Hz timer
 
-//create a variable of type "Twist", as defined in: /opt/ros/hydro/share/geometry_msgs
-// any message published on a ROS topic must have a pre-defined format, so subscribers know how to
-// interpret the serialized data transmission
-geometry_msgs::Twist twist_cmd;
-// look at the components of a message of type geometry_msgs::Twist by typing:
-// rosmsg show geometry_msgs/Twist
-// It has 6 fields.  Let's fill them all in with some data:
-twist_cmd.linear.x = 0.0;
-twist_cmd.linear.y = 0.0;
-twist_cmd.linear.z = 0.0;
-twist_cmd.angular.x = 0.0;
-twist_cmd.angular.y = 0.0;
-twist_cmd.angular.z = 0.0;
+	/*
+	pose: 
+	  pose: 
+		position: 
+		  x: 27.0
+		  y: 21.0
+		  z: 0.0
+		orientation: 
+		  x: -0.0
+		  y: 0.0
+		  z: 0.928959715004
+		  w: -0.370180831351
 
-twist_cmd.linear.x = 0.4;
+	aka rosrun stdr_robot robot_handler replace /robot0 27.0 21.0 3.899999
 
+	*/
+	ros::init(argc,argv,"robot0_commander_wcb38");
+	ros::NodeHandle nh;
+	ros::Publisher velcmd_pub = nh.advertise<geometry_msgs::Twist>("/robot0/cmd_vel",1);
+	// change topic to command abby...
+	//ros::Publisher velcmd_pub = nh.advertise<geometry_msgs::Twist>("abby/cmd_vel",1);
+	ros::Rate sleep_timer(111); //111Hz timer
 
-// timer test...print out a message every 1 second
-ROS_INFO("count-down");
-for (int j=3;j>0;j--) {
-    ROS_INFO("%d",j);
-    for (int i = 0; i<100;i++)
-        sleep_timer.sleep();
-}
+	geometry_msgs::Twist twist_cmd;
+	twist_cmd.linear.x = 0.0;
+	twist_cmd.linear.y = 0.0;
+	twist_cmd.linear.z = 0.0;
+	twist_cmd.angular.x = 0.0;
+	twist_cmd.angular.y = 0.0;
+	twist_cmd.angular.z = 0.0;
 
-int niters = 1200; //1000 iters at 100Hz is 10 seconds;
-//iteration counter; at 10ms/iteration, and 0.2m/sec, expect 2mm/iter
-// should move by 2m over 10 sec
-for (int i=0;i<niters;i++) {
-    cmd_publisher.publish(twist_cmd); // really, should only need to publish this once, but no hard done
-    sleep_timer.sleep(); // sleep for (remainder of) 10m
-}
-twist_cmd.linear.x = 0.0;
-twist_cmd.angular.z = -0.314;
-niters=500; // 5 sec
-ROS_INFO("Time to rotate negative");
-for (int i=0;i<niters;i++) {
-    cmd_publisher.publish(twist_cmd); // really, should only need to publish this once, but no hard done
-    sleep_timer.sleep(); // sleep for (remainder of) 10m
-}
-ROS_INFO("my work here is done");
-//while (ros::ok()) 
-{
-twist_cmd.linear.x = 0.0;
-twist_cmd.angular.z = 0;
-cmd_publisher.publish(twist_cmd); // and halt
-}
+	ROS_INFO("count-down 3 seconds");
+	for (int j=3;j>0;j--) {
+		ROS_INFO("%d!",j);
+		for (int i = 0; i<111;i++)
+		    sleep_timer.sleep();
+	}
+	ROS_INFO("0!");
+	ROS_INFO("Onward March -->");
+	int niters = 2333; // 5m (2500K)--(667|1/3 m)
+/*
+	1000 iters at 111Hz is 9.009 seconds; 
+	at 9.009ms/iteration, and 0.222m/sec, expect 2.0mm/iter ; 
+	should move by 2m over 9.009 sec 
+*/
+	velcmd_pub.publish(twist_cmd); //0|0
+	for (int i=0;i<niters;i++) {
+		twist_cmd.linear.x = 0.222;
+		velcmd_pub.publish(twist_cmd); //.222|0
+		sleep_timer.sleep();
+	}
+	twist_cmd.linear.x = 0.0;
+	twist_cmd.angular.z = 0.0;
+	velcmd_pub.publish(twist_cmd); //0|0
+	ROS_INFO(" --> End March");
 
+/*
+	ROS_INFO("count-down 3 seconds");
+	for (int j=3;j>0;j--) {
+		ROS_INFO("%d!",j);
+		for (int i = 0; i<111;i++)
+		    sleep_timer.sleep();
+	}
+	ROS_INFO("0!");
+//*/
 
-return 0;
+	ROS_INFO("Turn to April --> ");
+	niters=500; // 4.5045 sec, 90deg
+	for (int i=0;i<niters;i++) {
+		twist_cmd.angular.z = -0.3487; //0|-.3487
+		velcmd_pub.publish(twist_cmd);
+		sleep_timer.sleep();
+	}
+	twist_cmd.linear.x = 0.0;
+	twist_cmd.angular.z = 0.0;
+	velcmd_pub.publish(twist_cmd); //0|0
+	ROS_INFO(" --> End April");
+
+/*
+	ROS_INFO("count-down 3 seconds");
+	for (int j=3;j>0;j--) {
+		ROS_INFO("%d!",j);
+		for (int i = 0; i<111;i++)
+		    sleep_timer.sleep();
+	}
+	ROS_INFO("0!");
+//*/
+	
+	ROS_INFO("Onward May -->");
+	niters = 6125; // 12 m (6K)++(250|.25m)
+	for (int i=0;i<niters;i++) {
+		twist_cmd.linear.x = 0.222;
+		velcmd_pub.publish(twist_cmd); //.222|0
+		sleep_timer.sleep();
+	}
+	twist_cmd.linear.x = 0.0;
+	twist_cmd.angular.z = 0.0;
+	velcmd_pub.publish(twist_cmd); //0|0
+	ROS_INFO(" --> End May");
+
+/*
+	ROS_INFO("count-down 3 seconds");
+	for (int j=3;j>0;j--) {
+		ROS_INFO("%d!",j);
+		for (int i = 0; i<111;i++)
+		    sleep_timer.sleep();
+	}
+	ROS_INFO("0!");
+//*/
+
+	ROS_INFO("Turn to June --> ");
+	niters=495; // 4.5045 sec, 90deg|500iter --(tuning)|005
+	for (int i=0;i<niters;i++) {
+		twist_cmd.angular.z = -0.3487; //0|-.3487
+		velcmd_pub.publish(twist_cmd);
+		sleep_timer.sleep();
+	}
+	twist_cmd.linear.x = 0.0;
+	twist_cmd.angular.z = 0.0;
+	velcmd_pub.publish(twist_cmd); //0|0
+	ROS_INFO(" --> End June");
+
+/*
+	ROS_INFO("count-down 3 seconds");
+	for (int j=3;j>0;j--) {
+		ROS_INFO("%d!",j);
+		for (int i = 0; i<111;i++)
+		    sleep_timer.sleep();
+	}
+	ROS_INFO("0!");
+//*/
+
+	ROS_INFO("Onward July -->");
+	niters = 7500; // 12 m
+	for (int i=0;i<niters;i++) {
+		twist_cmd.linear.x = 0.222;
+		velcmd_pub.publish(twist_cmd); //.222|0
+		sleep_timer.sleep();
+	}
+	twist_cmd.linear.x = 0.0;
+	twist_cmd.angular.z = 0.0;
+	velcmd_pub.publish(twist_cmd); //0|0
+	ROS_INFO(" --> End July");
+
+	ROS_INFO("Tired August.");
+	twist_cmd.linear.x = 0.0;
+	twist_cmd.angular.z = 0;
+	velcmd_pub.publish(twist_cmd); //0|0 and halt
+	return 0;
 } 
