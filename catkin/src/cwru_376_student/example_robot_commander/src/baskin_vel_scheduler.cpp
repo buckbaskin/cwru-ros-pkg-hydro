@@ -84,15 +84,21 @@ int main(int argc, char **argv) {
 	path[3] = 1.58;
 	path[4] = 2.5;
 	path[5] = 0.0; //done
+
+
 	double segment_length = 0.0;
 	double segment_length_done = 0.0; // need to compute actual distance travelled within the current segment
+
 	double start_x = 0.0; // fill these in with actual values once odom message is received
 	double start_y = 0.0; // subsequent segment start coordinates should be specified relative to end of previous segment
 	double start_phi = 0.0;
+
 	double scheduled_vel = 0.0; //desired vel, assuming all is per plan
 	double scheduled_w = 0.0;
-	double linear_gain = 1.0;
+
+	double linear_gain = 0.5;
 	double angular_gain = 0.5;
+
 	double new_cmd_vel = 0.1; // value of speed to be commanded; update each iteration
 	double new_cmd_omega = 0.0; // update spin rate command as well
 	geometry_msgs::Twist cmd_vel; //create a variable of type "Twist" to publish speed/spin commands
@@ -102,7 +108,7 @@ int main(int argc, char **argv) {
 	cmd_vel.angular.x = 0.0;
 	cmd_vel.angular.y = 0.0;
 	cmd_vel.angular.z = 0.0;
-	while(segment_index < path.size) {
+	while(segment_index < path.size && ros::ok()) {
 		// here is a crude description of one segment of a journey. Will want to generalize this to handle multiple segments
 		// define the desired path length of this segment
 		double segment_length = path[segment_index]; // desired travel distance in meters; anticipate travelling multiple segments
@@ -125,6 +131,8 @@ int main(int argc, char **argv) {
 		START CONTROL LOGIC
 		*/
 		if (segment_index % 2 == 0) { //linear drive forward (USES NEWMAN CODE)
+			double max_vel = 1.0;
+			double max_accel = 0.5;
 			// compute some properties of trapezoidal velocity profile plan:
 			double T_accel = v_max / a_max; //...assumes start from rest
 			double T_decel = v_max / a_max; //(for same decel as accel); assumes brake to full halt
@@ -135,56 +143,51 @@ int main(int argc, char **argv) {
 			double T_segment_tot = T_accel + T_decel + T_const_v; // expected duration of this move
 			//dist_decel*= 2.0; // TEST TEST TEST
 			ROS_INFO("forward segment #%d", (segment_index+1))
-			while (ros::ok()) // do work here in infinite loop (desired for this example), but terminate if detect ROS has faulted (or ctl-C)
+			while (ros::ok())
 			{
-				ros::spinOnce(); // allow callbacks to populate fresh data
-				// compute distance travelled so far:
+				ros::spinOnce();
 				double delta_x = odom_x_ - start_x;
 				double delta_y = odom_y_ - start_y;
 				segment_length_done = sqrt(delta_x * delta_x + delta_y * delta_y);
 				ROS_INFO("dist travelled: %f", segment_length_done);
 				double dist_to_go = segment_length - segment_length_done;
-				//use segment_length_done to decide what vel should be, as per plan
-				if (dist_to_go<= 0.0) { // at goal, or overshot; stop!
+				
+				//planning speed to go
+				if (dist_to_go<= 0.0) {
 					scheduled_vel=0.0;
 				}
-				else if (dist_to_go <= dist_decel) { //possibly should be braking to a halt
-					// dist = 0.5*a*t_halt^2; so t_halt = sqrt(2*dist/a); v = a*t_halt
-					// so v = a*sqrt(2*dist/a) = sqrt(2*dist*a)
-					scheduled_vel = sqrt(2 * dist_to_go * a_max);
-					ROS_INFO("braking zone: v_sched = %f",scheduled_vel);
+				else {
+					scheduled_vel = std::max(-1.0*max_vel , std::min(max_vel, dist_to_go*linear_gain));
+					if ( std::abs(schedule_vel) < .1) {
+						if (schedule_vel > 0.0) { schedule_vel = 0.1 ; }
+						else { schedule_vel = -0.1 ; }
+					}
 				}
-				else { // not ready to decel, so target vel is v_max, either accel to it or hold it
-					scheduled_vel = v_max;
+
+				// check against accel limits
+				if (odom_vel_ < scheduled_vel - max_accel*dt_callback_) {
+					double v_test = odom_vel_ + max_accel*dt_callback_;
+					new_cmd_vel = v_test;
 				}
-				//how does the current velocity compare to the scheduled vel?
-				if (odom_vel_ < scheduled_vel) { // maybe we halted, e.g. due to estop or obstacle;
-					// may need to ramp up to v_max; do so within accel limits
-					double v_test = odom_vel_ + a_max*dt_callback_; // if callbacks are slow, this could be abrupt
-					// operator: c = (a>b) ? a : b;
-					new_cmd_vel = (v_test < scheduled_vel) ? v_test : scheduled_vel; //choose lesser of two options
-					// this prevents overshooting scheduled_vel
-				}
-				else if (odom_vel_ > scheduled_vel) { //travelling too fast--this could be trouble
-					// ramp down to the scheduled velocity. However, scheduled velocity might already be ramping down at a_max.
-					// need to catch up, so ramp down even faster than a_max. Try 1.2*a_max.
-					ROS_INFO("odom vel: %f; sched vel: %f",odom_vel_,scheduled_vel); //debug/analysis output; can comment this out
-					double v_test = odom_vel_ - 1.2 * a_max*dt_callback_; //moving too fast--try decelerating faster than nominal a_max
-					new_cmd_vel = (v_test > scheduled_vel) ? v_test : scheduled_vel; // choose larger of two options...don't overshoot scheduled_vel
+				else if (odom_vel_ > scheduled_vel + a_max*dt_callback_) {
+					double v_test = odom_vel_ - a_max*dt_callback_;
+					new_cmd_vel = v_test;
 				}
 				else {
-					new_cmd_vel = scheduled_vel; //silly third case: this is already true, if here. Issue the scheduled velocity
+					new_cmd_vel = scheduled_vel;
 				}
 				ROS_INFO("cmd vel: %f",new_cmd_vel); // debug output
+
+				//publish message
 				cmd_vel.linear.x = new_cmd_vel;
-				cmd_vel.angular.z = 0.0; // spin command; always zero, in this example
-				if (dist_to_go <= 0.0) { //uh-oh...went too far already!
+				cmd_vel.angular.z = 0.0;
+				if (dist_to_go <= 0.0) {
 					cmd_vel.linear.x = 0.0;
 					cmd_vel.angular.w = 0.0;
 				}
-				vel_cmd_pub.publish(cmd_vel); // publish the command to robot0/cmd_vel
-				if (dist_to_go <= 0.0) break; // end loop for this segment
-				rtimer.sleep(); // sleep for remainder of timed iteration
+				vel_cmd_pub.publish(cmd_vel);
+				if (dist_to_go <= 0.0) break;
+				rtimer.sleep();
 
 			}
 			ROS_INFO("completed move distance for segment %d", (segment_index+1));
@@ -202,7 +205,7 @@ int main(int argc, char **argv) {
 				double dist_to_go = segment_length - segment_length_done;
 				//planning speed to go
 				if (dist_to_go<= 0.0) {
-				scheduled_w=0.0;
+					scheduled_w=0.0;
 				}
 				else {
 					schedule_w = std::max(-1.0*max_w , std::min(max_w, dist_to_go*angular_gain));
@@ -239,6 +242,9 @@ int main(int argc, char **argv) {
 			ROS_INFO("completed turn distance for segment %d", (segment_index+1));
 			segment_index = segment_index+1;
 		} //end if statement for chosing turn or forward
+		/*
+			END CONTROL LOGIC
+		*/
 	} //end while loop to run through segments
 	return 0;
 	// end node
