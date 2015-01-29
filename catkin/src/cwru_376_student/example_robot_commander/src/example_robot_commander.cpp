@@ -17,7 +17,7 @@ int main(int argc, char **argv)
 		  z: 0.928959715004
 		  w: -0.370180831351
 
-	aka rosrun stdr_robot robot_handler replace /robot0 27.0 21.0 3.899999
+	aka rosrun stdr_robot robot_handler replace /robot0 27.0 21.0 3.90
 
 	*/
 	ros::init(argc,argv,"robot0_commander_wcb38");
