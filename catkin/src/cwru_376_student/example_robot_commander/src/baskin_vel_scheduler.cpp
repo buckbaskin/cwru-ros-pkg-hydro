@@ -21,6 +21,10 @@ qz = sin(angle/2)
 qw = cos(angle/2)
 therefore, theta = 2*atan2(qz,qw)
 */
+
+//rosrun stdr_robot robot_handler replace /robot0 27 21 3.9
+
+
 #include <ros/ros.h>
 #include <std_msgs/Float64.h>
 #include <geometry_msgs/Twist.h>
@@ -69,7 +73,7 @@ void odomCallback(const nav_msgs::Odometry& odom_rcvd) {
 	double quat_w = odom_rcvd.pose.pose.orientation.w;
 	odom_phi_ = 2.0*atan2(quat_z, quat_w); // cheap conversion from quaternion to heading for planar motion
 	// the output below could get annoying; may comment this out, but useful initially for debugging
-	ROS_INFO("odom CB: x = %f, y= %f, phi = %f, v = %f, omega = %f", odom_x_, odom_y_, odom_phi_, odom_vel_, odom_omega_);
+	//ROS_INFO("odom CB: x = %f, y= %f, phi = %f, v = %f, omega = %f", odom_x_, odom_y_, odom_phi_, odom_vel_, odom_omega_);
 }
 int main(int argc, char **argv) {
 	ros::init(argc, argv, "vel_scheduler_wcb38");
@@ -78,12 +82,12 @@ int main(int argc, char **argv) {
 	ros::Subscriber odom_sub = nh.subscribe("/robot0/odom", 1, odomCallback);
 	ros::Rate rtimer(1 / DT);
 	path.resize(6,0.0); // index % 2 == 0 --> straight_dist in meters. index%2 == 1 --> turn_angle in radians.
-	path[0] = 2.5;
-	path[1] = 1.58;
-	path[2] = 2.5;
-	path[3] = 1.58;
-	path[4] = 2.5;
-	path[5] = 0.0; //done
+	path[0] =  4.666;
+	path[1] = -1.54;
+	path[2] =  12.25;
+	path[3] = -1.571;
+	path[4] =  8.0;
+	path[5] =  0.0; //done
 
 
 	double segment_length = 0.0;
@@ -96,7 +100,7 @@ int main(int argc, char **argv) {
 	double scheduled_vel = 0.0; //desired vel, assuming all is per plan
 	double scheduled_w = 0.0;
 
-	double linear_gain = 0.5;
+	double linear_gain = 0.25;
 	double angular_gain = 0.5;
 
 	double new_cmd_vel = 0.1; // value of speed to be commanded; update each iteration
@@ -108,7 +112,7 @@ int main(int argc, char **argv) {
 	cmd_vel.angular.x = 0.0;
 	cmd_vel.angular.y = 0.0;
 	cmd_vel.angular.z = 0.0;
-	while(segment_index < path.size && ros::ok()) {
+	while(segment_index < path.size() && ros::ok()) {
 		// here is a crude description of one segment of a journey. Will want to generalize this to handle multiple segments
 		// define the desired path length of this segment
 		double segment_length = path[segment_index]; // desired travel distance in meters; anticipate travelling multiple segments
@@ -131,8 +135,8 @@ int main(int argc, char **argv) {
 		START CONTROL LOGIC
 		*/
 		if (segment_index % 2 == 0) { //linear drive forward (USES NEWMAN CODE)
-			double max_vel = 1.0;
-			double max_accel = 0.5;
+			double max_vel = v_max;
+			double max_accel = a_max;
 			// compute some properties of trapezoidal velocity profile plan:
 			double T_accel = v_max / a_max; //...assumes start from rest
 			double T_decel = v_max / a_max; //(for same decel as accel); assumes brake to full halt
@@ -142,25 +146,25 @@ int main(int argc, char **argv) {
 			double T_const_v = dist_const_v / v_max; //will be <0 if don't get to full speed
 			double T_segment_tot = T_accel + T_decel + T_const_v; // expected duration of this move
 			//dist_decel*= 2.0; // TEST TEST TEST
-			ROS_INFO("forward segment #%d", (segment_index+1))
+			ROS_INFO("forward segment #%d", (segment_index+1));
 			while (ros::ok())
 			{
 				ros::spinOnce();
 				double delta_x = odom_x_ - start_x;
 				double delta_y = odom_y_ - start_y;
 				segment_length_done = sqrt(delta_x * delta_x + delta_y * delta_y);
-				ROS_INFO("dist travelled: %f", segment_length_done);
+				//ROS_INFO("dist travelled: %f", segment_length_done);
 				double dist_to_go = segment_length - segment_length_done;
-				
+				ROS_INFO("dist_to_go: %f", dist_to_go);
 				//planning speed to go
 				if (dist_to_go<= 0.0) {
 					scheduled_vel=0.0;
 				}
 				else {
 					scheduled_vel = std::max(-1.0*max_vel , std::min(max_vel, dist_to_go*linear_gain));
-					if ( std::abs(schedule_vel) < .1) {
-						if (schedule_vel > 0.0) { schedule_vel = 0.1 ; }
-						else { schedule_vel = -0.1 ; }
+					if ( std::abs(scheduled_vel) < v_min) {
+						if (scheduled_vel > 0.0) { scheduled_vel = v_min ; }
+						else { scheduled_vel = -v_min ; }
 					}
 				}
 
@@ -176,14 +180,14 @@ int main(int argc, char **argv) {
 				else {
 					new_cmd_vel = scheduled_vel;
 				}
-				ROS_INFO("cmd vel: %f",new_cmd_vel); // debug output
+				//ROS_INFO("cmd vel: %f",new_cmd_vel); // debug output
 
 				//publish message
 				cmd_vel.linear.x = new_cmd_vel;
 				cmd_vel.angular.z = 0.0;
 				if (dist_to_go <= 0.0) {
 					cmd_vel.linear.x = 0.0;
-					cmd_vel.angular.w = 0.0;
+					cmd_vel.angular.z = 0.0;
 				}
 				vel_cmd_pub.publish(cmd_vel);
 				if (dist_to_go <= 0.0) break;
@@ -194,49 +198,64 @@ int main(int argc, char **argv) {
 			segment_index = segment_index+1;
 		}
 		else { //turning to heading
-			double max_alpha = 0.25;
-			double max_w = 0.5;
-			ROS_INFO("turn segment #%d", (segment_index+1))
+			double max_alpha = alpha_max;
+			double max_w = omega_max;
+			ROS_INFO("turn segment #%d", (segment_index+1));
 			while (ros::ok())
 			{
 				ros::spinOnce();
-				segment_length_done = odom_phi - start_phi;
+				segment_length_done = odom_phi_- start_phi;
+				ROS_INFO("\n\n");
+				ROS_INFO("segment length : %f", segment_length);
+				ROS_INFO("odom_phi_: %f", odom_phi_);
+				ROS_INFO("start_phi: %f", start_phi);
 				ROS_INFO("dist twisted: %f", segment_length_done);
 				double dist_to_go = segment_length - segment_length_done;
+				ROS_INFO("dist to go: %f", dist_to_go);
 				//planning speed to go
-				if (dist_to_go<= 0.0) {
+				if (dist_to_go<= 0.0 && segment_length >= 0.0) {
+					scheduled_w=0.0;
+				}
+				else if (dist_to_go > 0.0 && segment_length < 0.0 ) {
 					scheduled_w=0.0;
 				}
 				else {
-					schedule_w = std::max(-1.0*max_w , std::min(max_w, dist_to_go*angular_gain));
-					if ( std::abs(schedule_w) < .05) {
-						if (schedule_w > 0.0) { schedule_w = 0.05 ; }
-						else { schedule_w = -0.05 ; }
+					scheduled_w = std::max(-1.0*max_w , std::min(max_w, dist_to_go*angular_gain));
+					//if (segment_length < 0.0 ) { scheduled_w = scheduled_w * -1.0; }
+					if ( std::abs(scheduled_w) < .05) {
+						if (scheduled_w > 0.0) { scheduled_w = 0.05 ; }
+						else { scheduled_w = -0.05 ; }
 					}
 				}
+				ROS_INFO("scheduled_w: %f" , scheduled_w);
 				//check against accel limits
-				if (odom_omega_ < schedule_w - max_alpha*dt_callback_) {
+				if (odom_omega_ < scheduled_w - max_alpha*dt_callback_) {
 					double w_test = odom_omega_ + max_alpha*dt_callback_;
 					new_cmd_omega = w_test;
 				}
-				else if (odom_vel_ > schedule_w + max_alpha*dt_callback_) {
-					double w_test = odom_omega_ + max_alpha*dt_callback_;
+				else if (odom_vel_ > scheduled_w + max_alpha*dt_callback_) {
+					double w_test = odom_omega_ - max_alpha*dt_callback_;
 					new_cmd_omega = w_test;
 				}
 				else {
-					new_cmd_omega = schedule_w;
+					new_cmd_omega = scheduled_w;
 				}
-				ROS_INFO("cmd vel: %f",new_cmd_omega);
+				//ROS_INFO("cmd vel: %f",new_cmd_omega);
 				//publish message
 				cmd_vel.linear.x = 0.0;
 				cmd_vel.angular.z = new_cmd_omega;
-				if (dist_to_go <= 0.0) {
+				if (dist_to_go<= 0.0 && segment_length >= 0.0) {
 					cmd_vel.linear.x = 0.0;
-					cmd_vel.angular.w = 0.0;
+					cmd_vel.angular.z = 0.0;
+				}
+				else if (dist_to_go > 0.0 && segment_length < 0.0 ) {
+					cmd_vel.linear.x = 0.0;
+					cmd_vel.angular.z = 0.0;
 				}
 				vel_cmd_pub.publish(cmd_vel);
 				//leave if done
-				if (dist_to_go <= 0.0) break;
+				if (dist_to_go <= 0.0 && segment_length >= 0.0) break;
+				if (dist_to_go >= 0.0 && segment_length <= 0.0) break;
 				rtimer.sleep();
 			}
 			ROS_INFO("completed turn distance for segment %d", (segment_index+1));
@@ -246,6 +265,9 @@ int main(int argc, char **argv) {
 			END CONTROL LOGIC
 		*/
 	} //end while loop to run through segments
+	cmd_vel.linear.x = 0.0;
+	cmd_vel.angular.z = 0.0;
+	vel_cmd_pub.publish(cmd_vel);
 	return 0;
 	// end node
 }
