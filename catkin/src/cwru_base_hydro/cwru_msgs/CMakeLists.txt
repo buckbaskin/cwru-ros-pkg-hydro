@@ -1,17 +1,16 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(cwru_base)
+project(cwru_msgs)
 
 find_package(catkin REQUIRED COMPONENTS
-  diagnostic_updater
-  geometry_msgs
-  nav_msgs
   roscpp
-  rospy
-  #sicktoolbox_wrapper
-  std_msgs
-  cwru_msgs
-  std_srvs
   tf
+  actionlib
+  actionlib_msgs
+  geometry_msgs
+  message_generation
+  nav_msgs
+  std_msgs
+  trajectory_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -25,15 +24,15 @@ find_package(Boost REQUIRED COMPONENTS system)
 
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   cRIOSensors.msg
-#   NavSatFix.msg
-#   NavSatStatus.msg
-#   Pose.msg
-#   PowerState.msg
-#   Sonar.msg
-# )
+ add_message_files(
+   FILES
+   cRIOSensors.msg
+   NavSatStatus.msg
+   NavSatFix.msg
+   Pose.msg
+   PowerState.msg
+   Sonar.msg
+ )
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -50,10 +49,11 @@ find_package(Boost REQUIRED COMPONENTS system)
 # )
 
 ## Generate added messages and services with any dependencies listed here
-#generate_messages(
-#  DEPENDENCIES
-#  std_msgs
-#)
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+  
+)
 
 ###################################
 ## catkin specific configuration ##
@@ -66,9 +66,10 @@ find_package(Boost REQUIRED COMPONENTS system)
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
 #  INCLUDE_DIRS include
-#  LIBRARIES cwru_base
-#  CATKIN_DEPENDS diagnostic_updater geometry_msgs nav_msgs roscpp rospy sicktoolbox_wrapper std_msgs std_srvs tf
-#  DEPENDS message_runtime
+#  LIBRARIES cwru_msgs
+#  CATKIN_DEPENDS actionlib actionlib_msgs geometry_msgs message_generation nav_msgs std_msgs trajectory_msgs
+#  DEPENDS system_lib
+  DEPENDS message_runtime
 )
 
 ###########
@@ -79,26 +80,25 @@ catkin_package(
 ## Your package locations should be listed before other locations
 # include_directories(include)
 include_directories(
-  INCLUDE_DIRS include 
   ${catkin_INCLUDE_DIRS}
 )
 
 ## Declare a cpp library
-# add_library(cwru_base
-#   src/${PROJECT_NAME}/cwru_base.cpp
+# add_library(cwru_msgs
+#   src/${PROJECT_NAME}/cwru_msgs.cpp
 # )
 
 ## Declare a cpp executable
-add_executable(crio_receiver src/crio_receiver.cpp)
+# add_executable(cwru_msgs_node src/cwru_msgs_node.cpp)
 
 ## Add cmake target dependencies of the executable/library
 ## as an example, message headers may need to be generated before nodes
-# add_dependencies(cwru_base_node cwru_base_generate_messages_cpp)
+# add_dependencies(cwru_msgs_node cwru_msgs_generate_messages_cpp)
 
 ## Specify libraries to link a library or executable target against
-target_link_libraries(crio_receiver
-  ${catkin_LIBRARIES}
-)
+# target_link_libraries(cwru_msgs_node
+#   ${catkin_LIBRARIES}
+# )
 
 #############
 ## Install ##
@@ -115,7 +115,7 @@ target_link_libraries(crio_receiver
 # )
 
 ## Mark executables and/or libraries for installation
-# install(TARGETS cwru_base cwru_base_node
+# install(TARGETS cwru_msgs cwru_msgs_node
 #   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 #   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 #   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
@@ -140,7 +140,7 @@ target_link_libraries(crio_receiver
 #############
 
 ## Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_cwru_base.cpp)
+# catkin_add_gtest(${PROJECT_NAME}-test test/test_cwru_msgs.cpp)
 # if(TARGET ${PROJECT_NAME}-test)
 #   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
 # endif()
